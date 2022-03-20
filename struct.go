@@ -26,14 +26,35 @@ func NewWithMeta[T any](m *Meta, fm ...StructMapper) *Struct[T] {
 	return &Struct[T]{md: m, sm: sm}
 }
 
+// WithMeta assign meta data and optionally StructMapper
+func (a *Struct[T]) WithMeta(m *Meta, fm ...StructMapper) *Struct[T] {
+	a.md = m
+	if len(fm) > 0 {
+		a.sm = fm[0]
+	}
+	return a
+}
+
 // Metadata return struct meta data
 func (a *Struct[T]) Metadata() *Meta {
 	return a.md
 }
 
+// WithMetadata assign metadata
+func (a *Struct[T]) WithMetadata(m *Meta) *Struct[T] {
+	a.md = m
+	return a
+}
+
 // Mapper return struct mapper
 func (a *Struct[T]) Mapper() StructMapper {
 	return a.sm
+}
+
+// WithMapper assign field mapper
+func (a *Struct[T]) WithMapper(fm StructMapper) *Struct[T] {
+	a.sm = fm
+	return a
 }
 
 // Introspect struct meta data
@@ -74,10 +95,11 @@ func (a *Struct[T]) MustMap(tag ...string) *Struct[T] {
 
 // FieldValues extract field values from given v
 func (a *Struct[T]) FieldValues(v *T) []interface{} {
-	values := make([]interface{}, len(a.md.Fields))
+	fields := a.md.Fields
+	values := make([]interface{}, len(fields))
 	rv := reflect.ValueOf(v).Elem()
-	for i := 0; i < len(a.md.Fields); i++ {
-		idx := a.md.Fields[i].SF.Index
+	for i := 0; i < len(fields); i++ {
+		idx := fields[i].SF.Index
 		fv := rv.FieldByIndex(idx)
 		values[i] = fv.Interface()
 	}
@@ -87,10 +109,11 @@ func (a *Struct[T]) FieldValues(v *T) []interface{} {
 
 // FieldPointers extract field address (pointer) from given v
 func (a *Struct[T]) FieldPointers(v *T) []interface{} {
-	values := make([]interface{}, len(a.md.Fields))
+	fields := a.md.Fields
+	values := make([]interface{}, len(fields))
 	rv := reflect.ValueOf(v).Elem()
-	for i := 0; i < len(a.md.Fields); i++ {
-		idx := a.md.Fields[i].SF.Index
+	for i := 0; i < len(fields); i++ {
+		idx := fields[i].SF.Index
 		fv := rv.FieldByIndex(idx)
 		values[i] = fv.Addr().Interface()
 	}
