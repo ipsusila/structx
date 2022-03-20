@@ -1,22 +1,75 @@
 package structx
 
 import (
+	"errors"
 	"reflect"
 )
 
-func (in *Info) hasElement(ft reflect.Type) bool {
+// Known errors
+var (
+	ErrNonStructType  = errors.New("type is not struct")
+	ErrFieldNotExists = errors.New("field not exists in the struct")
+)
+
+// Introspect struct and return visible fields information or error.
+// This function ignores unexported fields, channels and function members.
+func Introspect[T any]() (*Meta, error) {
+	t := reflect.TypeOf((*T)(nil)).Elem()
+	m := Meta{}
+	if err := m.introspect(t); err != nil {
+		return nil, err
+	}
+	return &m, nil
+
+}
+
+// MustIntrospect analyze struct T, return visible fields info, and panic if error.
+// This function ignores unexported fields, channels and function members.
+func MustIntrospect[T any]() *Meta {
+	t := reflect.TypeOf((*T)(nil)).Elem()
+	m := Meta{}
+	if err := m.introspect(t); err != nil {
+		panic(err)
+	}
+	return &m
+}
+
+// IntrospectFunc struct and return its visible fields related information
+// filtered by supplied function fn.
+func IntrospectFunc[T any](fn func(fi reflect.StructField) bool) (*Meta, error) {
+	t := reflect.TypeOf((*T)(nil)).Elem()
+	m := Meta{}
+	if err := m.introspectFunc(t, fn); err != nil {
+		return nil, err
+	}
+	return &m, nil
+
+}
+
+// MustIntrospectFunc analyze struct T, and panic if error.
+// Visible struct fields are filtered with supplied function fn.
+func MustIntrospectFunc[T any](fn func(fi reflect.StructField) bool) *Meta {
+	t := reflect.TypeOf((*T)(nil)).Elem()
+	m := Meta{}
+	if err := m.introspectFunc(t, fn); err != nil {
+		panic(err)
+	}
+	return &m
+}
+
+func (m *Meta) hasElement(ft reflect.Type) bool {
 	return ft.Kind() == reflect.Pointer ||
 		ft.Kind() == reflect.Slice ||
 		ft.Kind() == reflect.Array
 }
 
-func (in *Info) includeFunc(fi reflect.StructField) bool {
+func (m *Meta) includeFunc(fi reflect.StructField) bool {
 	if fi.Tag != "" {
 		return true
 	}
 
 	ft := fi.Type
-	for in.hasElement(ft) {
+	for m.hasElement(ft) {
 		ft = ft.Elem()
 	}
 	ki := ft.Kind()
@@ -35,18 +88,11 @@ func (in *Info) includeFunc(fi reflect.StructField) bool {
 }
 
 // introspect reflect.Type of Struct
-func (in *Info) introspectStructFunc(t reflect.Type, fn func(f reflect.StructField) bool) error {
+func (m *Meta) introspectStructFunc(t reflect.Type, fn func(f reflect.StructField) bool) error {
 	fields := reflect.VisibleFields(t)
 	for _, fi := range fields {
 		if !fn(fi) {
 			continue
-		}
-
-		// Get type or element's type
-		ft := fi.Type
-		ki := ft.Kind()
-		for in.hasElement(ft) {
-			ft = ft.Elem()
 		}
 
 		tags, err := parseTag(fi.Tag)
@@ -54,31 +100,30 @@ func (in *Info) introspectStructFunc(t reflect.Type, fn func(f reflect.StructFie
 			return err
 		}
 		sf := Field{
-			Kind:        ki,
-			Name:        fi.Name,
-			PkgPath:     fi.PkgPath,
-			TypeName:    ft.Name(),
-			TypePkgPath: ft.PkgPath(),
-			Tags:        tags,
+			SF:   fi,
+			Name: fi.Name,
+			Tags: tags,
+			Zero: reflect.New(fi.Type),
 		}
-		in.Fields = append(in.Fields, sf)
+
+		m.Fields = append(m.Fields, sf)
 	}
 	return nil
 }
 
-func (in *Info) introspect(t reflect.Type) error {
-	return in.introspectFunc(t, in.includeFunc)
+func (m *Meta) introspect(t reflect.Type) error {
+	return m.introspectFunc(t, m.includeFunc)
 }
 
-func (in *Info) introspectFunc(t reflect.Type, fn func(f reflect.StructField) bool) error {
+func (m *Meta) introspectFunc(t reflect.Type, fn func(f reflect.StructField) bool) error {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
 		return ErrNonStructType
 	}
-	in.Name = t.Name()
-	in.PkgPath = t.PkgPath()
+	m.Name = t.Name()
+	m.PkgPath = t.PkgPath()
 
-	return in.introspectStructFunc(t, fn)
+	return m.introspectStructFunc(t, fn)
 }

@@ -1,9 +1,15 @@
 package structx
 
 import (
+	"errors"
 	"reflect"
 	"strconv"
 	"strings"
+)
+
+// Known errors
+var (
+	ErrNoMatchedField = errors.New("field that match given criteria does not exists")
 )
 
 func emptyOrContains(items []string, value string) bool {
